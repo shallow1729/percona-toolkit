@@ -9012,13 +9012,31 @@ sub main {
       {
          my $sql = "SHOW GLOBAL STATUS LIKE ?";
          my $sth = $cxn->dbh()->prepare($sql);
-
+         my $get_rds_cpu_command = <<"STR";
+aws cloudwatch get-metric-statistics --namespace AWS/RDS --dimensions Name=DBInstanceIdentifier,Value=$ENV{DB_INSTANCE_IDENTIFIER} \\
+--metric-name CPUUtilization --period 60 --statistics Average --start-time \$(date -u +'%Y-%m-%dT%H:%M:%SZ' -d '3 min ago') \\
+--end-time \$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+STR
          $get_status = sub {
             my ($var) = @_;
-            PTDEBUG && _d($sth->{Statement}, $var);
-            $sth->execute($var);
-            my (undef, $val) = $sth->fetchrow_array();
-            return $val;
+            if ($var eq 'cpuutilization') {
+               my $res = `$get_rds_cpu_command`;
+               my $result = JSON::decode_json($res);
+               # return 100 to stop when failed to fetch metrics
+               if (scalar(@{$result->{Datapoints}}) == 0) {
+                  print "failed to fetch cpuutilization\n";
+                  return 100;
+               }
+               my $result_array = [map { $_->{Average} } @{$result->{Datapoints}}];
+               my $load = (sort {$b <=> $a} @$result_array)[0];
+               # print "cpu utilization is $load\n";
+               return $load;
+            } else {
+              PTDEBUG && _d($sth->{Statement}, $var);
+              $sth->execute($var);
+              my (undef, $val) = $sth->fetchrow_array();
+              return $val;
+            }
          };
       }
 

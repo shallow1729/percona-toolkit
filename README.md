@@ -50,4 +50,6 @@ cd percona-toolkit/src/go
 make
 ```
 
-
+## CPUUtilization extension
+this sample check if RDS CPU Utilization is under 30%
+`DB_INSTANCE_IDENTIFIER=database pt-online-schema-change --alter "add column c1 int" D=hoge,t=fuga  --password password --user test --host host --execute --max-load cpuutilization=30 --chunk-size 10`
